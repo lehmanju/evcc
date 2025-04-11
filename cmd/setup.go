@@ -1062,32 +1062,31 @@ func configureAuth(conf globalconfig.Network, vehicles []api.Vehicle, router *mu
 	// initialize
 	authCollection := util.NewAuthCollection(paramC)
 
-	baseURI := conf.URI()
-	baseAuthURI := fmt.Sprintf("%s/oauth", baseURI)
-
 	var id int
 	for _, v := range vehicles {
 		if provider, ok := v.(api.AuthProvider); ok {
 			id += 1
 
-			basePath := fmt.Sprintf("vehicles/%d", id)
-			callbackURI := fmt.Sprintf("%s/%s/callback", baseAuthURI, basePath)
+			ap := authCollection.Register("oauth/vehicles", v.Title())
 
-			// register vehicle
-			ap := authCollection.Register(fmt.Sprintf("oauth/%s", basePath), v.Title())
-
-			provider.SetCallbackParams(baseURI, callbackURI, ap.Handler())
-
+			// vehicles/login?vid=1
 			auth.
 				Methods(http.MethodPost).
-				Path(fmt.Sprintf("/%s/login", basePath)).
-				HandlerFunc(provider.LoginHandler())
+				Path("/vehicles/login").
+				Queries("vid", strconv.Itoa(id)).
+				HandlerFunc(provider.LoginHandler(ap.Handler()))
+			// vehicles/callback?vid=1
+			auth.
+				Methods(http.MethodGet).
+				Path("/vehicles/callback").
+				Queries("vid", strconv.Itoa(id)).
+				HandlerFunc(provider.RedirectHandler())
+			// vehicles/logout?vid=1
 			auth.
 				Methods(http.MethodPost).
-				Path(fmt.Sprintf("/%s/logout", basePath)).
+				Path("/vehicles/logout").
+				Queries("vid", strconv.Itoa(id)).
 				HandlerFunc(provider.LogoutHandler())
-
-			log.INFO.Printf("ensure the oauth client redirect/callback is configured for %s: %s", v.Title(), callbackURI)
 		}
 	}
 

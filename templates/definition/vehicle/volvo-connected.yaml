@@ -34,22 +34,13 @@ params:
     help:
       en: "Client Secret of your [Volvo Developer App](https://developer.volvocars.com/)."
       de: "Client Secret deiner [Volvo Developer App](https://developer.volvocars.com/)."
-  - name: accessToken
-    required: true
-    mask: true
-  - name: refreshToken
-    required: true
-    mask: true
   - name: vin
-    example: WF0FXX...
+    example: YV1...
 render: |
   type: volvo-connected
   vccapikey: {{ .vccapikey }}
   credentials:
     id: {{ .clientId }}
     secret: {{ .clientSecret }}
-  tokens:
-    access: {{ .accessToken }}
-    refresh: {{ .refreshToken }}
   vin: {{ .vin }}
   {{ include "vehicle-common" . }}
