@@ -9,6 +9,7 @@ import (
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/evcc-io/evcc/server/db/settings"
 	"github.com/evcc-io/evcc/util"
+	"github.com/evcc-io/evcc/util/oauth"
 	"github.com/evcc-io/evcc/util/request"
 	"golang.org/x/oauth2"
 )
@@ -32,7 +33,9 @@ func Oauth2Config(id, secret string) *oauth2.Config {
 }
 
 type Identity struct {
-	ts      oauth2.TokenSource
+	oauth2.TokenSource
+	log     *util.Logger
+	oc      *oauth2.Config
 	mu      sync.Mutex
 	subject string
 }
@@ -49,6 +52,8 @@ func NewIdentity(log *util.Logger, config *oauth2.Config, token *oauth2.Token) (
 
 	v := &Identity{
 		subject: subject,
+		oc:      config,
+		log:     log,
 	}
 
 	var tok oauth2.Token
@@ -56,10 +61,7 @@ func NewIdentity(log *util.Logger, config *oauth2.Config, token *oauth2.Token) (
 		token = &tok
 	}
 
-	client := request.NewClient(log)
-	ctx := context.WithValue(context.Background(), oauth2.HTTPClient, client)
-
-	v.ts = config.TokenSource(ctx, token)
+	v.TokenSource = oauth.RefreshTokenSource(token, v)
 
 	if tok, err := v.Token(); err == nil {
 		token = tok
@@ -77,15 +79,18 @@ func NewIdentity(log *util.Logger, config *oauth2.Config, token *oauth2.Token) (
 	return v, nil
 }
 
-func (v *Identity) Token() (*oauth2.Token, error) {
+func (v *Identity) RefreshToken(token *oauth2.Token) (*oauth2.Token, error) {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 
-	tok, err := v.ts.Token()
+	// refresh token source
+	ctx := context.WithValue(context.Background(), oauth2.HTTPClient, request.NewClient(v.log))
+	token, err := v.oc.TokenSource(ctx, token).Token()
 	if err != nil {
 		return nil, err
 	}
-	err = settings.SetJson(v.subject, tok)
 
-	return tok, err
+	err = settings.SetJson(v.subject, token)
+
+	return token, err
 }
